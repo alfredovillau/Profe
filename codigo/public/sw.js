@@ -1,8 +1,8 @@
 // Service worker simple: cache-first para assets, network-first para HTML.
-const CACHE = 'profe-v3';
+const CACHE = 'profe-v4';
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest', './icon.svg'])));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest', './icon-192.png'])));
   self.skipWaiting();
 });
 

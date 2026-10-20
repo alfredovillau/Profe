@@ -85,7 +85,7 @@ export default function App() {
       {/* Sidebar desktop */}
       <aside className={cx('hidden flex-col gap-1 sticky top-0 h-[100dvh] px-4 py-8', !immersive && 'lg:flex')}>
         <div className="flex items-center gap-2.5 px-3 mb-10">
-          <div className="w-8 h-8 rounded-[10px] bg-ink text-cream grid place-items-center font-semibold">P</div>
+          <img src="icon-192.png" alt="" className="w-8 h-8 rounded-[10px] ring-1 ring-black/10" />
           <span className="text-[19px] font-semibold tracking-tight">Profe</span>
         </div>
         {TABS.map((t) => (
@@ -104,7 +104,7 @@ export default function App() {
       <main className={immersive ? 'w-full' : 'px-4 sm:px-6 lg:px-12 pt-6 lg:pt-12 pb-28 lg:pb-12 max-w-3xl w-full mx-auto'}>
         {!immersive && <div className="lg:hidden flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-[9px] bg-ink text-cream grid place-items-center text-sm font-semibold">P</div>
+            <img src="icon-192.png" alt="" className="w-7 h-7 rounded-[9px] ring-1 ring-black/10" />
             <span className="text-[17px] font-semibold tracking-tight">Profe</span>
           </div>
           <span className="inline-flex items-center gap-1 text-sm font-medium tabular-nums">

@@ -40,7 +40,7 @@ export default function Onboarding({ onDone, onDemo }: { onDone: (p: Profile) =>
 
   const steps = [
     <div key={0} className="text-center">
-      <div className="mx-auto w-16 h-16 rounded-2xl bg-ink text-cream grid place-items-center font-serif text-4xl">P</div>
+      <img src="icon-192.png" alt="" className="mx-auto w-20 h-20 rounded-[22px] ring-1 ring-black/10 shadow-sm" />
       <h1 className="mt-6 font-serif text-5xl md:text-6xl leading-none">Profe</h1>
       <p className="mt-3 text-ink-soft max-w-sm mx-auto">Inglés diario, personalizado y adaptativo. Unos minutos al día, con repasos inteligentes de lo que más te cuesta.</p>
       <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
