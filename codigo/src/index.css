@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+html, body { background: #F7F4EE; color: #161514; }
+body {
+  font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+.font-serif { font-weight: 600; letter-spacing: -0.035em; }
+h1, h2 { text-wrap: balance; }
+@keyframes fadeUp { from { opacity: .001; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.fade-up { animation: fadeUp .35s ease both; }
+@keyframes pulseRing { 0% { transform: scale(1); opacity: .45; } 100% { transform: scale(1.55); opacity: 0; } }
+@keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+@keyframes dot { 0%,80%,100% { opacity: .25; } 40% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+.safe-pb { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
+button { -webkit-user-select: none; user-select: none; }
