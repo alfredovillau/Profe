@@ -13,12 +13,21 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icon-192.png" />
+    <style>html,body{background:#F7F4EE;color:#161514;margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}#boot{min-height:100vh;display:grid;place-items:center;color:#9A9488;font-size:15px}</style>
+    <!-- Fuente sin bloquear la carga: si Google Fonts tarda, la app abre con la fuente del sistema -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <script type="module" crossorigin src="./assets/index-DRW06fsN.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <script type="module" crossorigin src="./assets/index-BX3Z07Xz.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-tMDY-4Af.css">
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div id="boot">Cargando Profe…</div></div>
+    <script>
+      // Si algo falla al iniciar, mostrarlo en pantalla en vez de dejarla en blanco
+      window.addEventListener('error', function (e) {
+        var b = document.getElementById('boot');
+        if (b) b.innerHTML = '<div style="max-width:320px;padding:24px;text-align:center"><b style="color:#161514">No se pudo abrir Profe</b><br><br>' + String(e.message || e).slice(0, 200) + '<br><br><small>' + navigator.userAgent + '</small></div>';
+      });
+    </script>
   </body>
 </html>

@@ -140,8 +140,9 @@ const third = (v: string) => ({ have: 'has', do: 'does', go: 'goes' } as Record<
   (/(ch|sh|s|x|o)$/.test(v) ? v + 'es' : /[^aeiou]y$/.test(v) ? v.slice(0, -1) + 'ies' : v + 's');
 const keepCase = (orig: string, rep: string) => (orig[0] === orig[0].toUpperCase() ? rep[0].toUpperCase() + rep.slice(1) : rep);
 
-type Rule = { re: RegExp; fix: (...m: string[]) => string; concept: string | null; note: string; when?: RegExp };
-const NOT_AFTER_AUX = '(?<!\\b(?:did|does|do|didn\'t|doesn\'t|will|can|could|should|would|might|must|to|let)\\s)';
+type Rule = { re: RegExp; fix: (...m: string[]) => string; concept: string | null; note: string; when?: RegExp; noAux?: boolean };
+// Sin lookbehind (no funciona en Safari antiguo): se revisa la palabra anterior a mano.
+const AUX = /\b(did|does|do|didn't|doesn't|will|can|could|should|would|might|must|to|let)\s+$/i;
 const RULES: Rule[] = [
   { re: /\b(went|go|goes|going|came|come|get|got)\s+in\s+(a|an|the)\s+(restaurant|store|shop|park|school|office|beach|party|mall|cinema|movies|gym|church|hospital|museum|concert|bar)\b/i,
     fix: (_, v, d, n) => `${v} to ${d} ${n}`, concept: 'g_prep', note: 'Movimiento hacia un lugar: go/went to.' },
@@ -155,9 +156,9 @@ const RULES: Rule[] = [
   { re: /\bi\s+have\s+(\d+)\s+years(\s+old)?\b/i, fix: (_, n) => `I am ${n} years old`, concept: 'g_be', note: 'La edad va con “be”.' },
   { re: /\b(he|she|it|my (?:mom|dad|brother|sister|friend|boss|teacher|wife|husband|son|daughter))\s+don't\b/i,
     fix: (_, p) => `${p} doesn't`, concept: 'g_present', note: 'Tercera persona: doesn’t.' },
-  { re: new RegExp(NOT_AFTER_AUX + '\\b(he|she|my (?:mom|dad|brother|sister|friend|boss|teacher|wife|husband))\\s+(go|have|do|like|want|work|live|play|watch|study|need|eat|drink|make|get|know|think|love)\\b', 'i'),
+  { noAux: true, re: new RegExp('\\b(he|she|my (?:mom|dad|brother|sister|friend|boss|teacher|wife|husband))\\s+(go|have|do|like|want|work|live|play|watch|study|need|eat|drink|make|get|know|think|love)\\b', 'i'),
     fix: (_, p, v) => `${p} ${third(v.toLowerCase())}`, concept: 'g_present', note: 'He/she + verbo con -s.' },
-  { re: new RegExp(NOT_AFTER_AUX + '\\b(i|we|they|he|she|you)\\s+(go|eat|have|see|buy|do|make|take|get|come|meet|drink|play|watch|visit|study|work)\\b', 'i'),
+  { noAux: true, re: new RegExp('\\b(i|we|they|he|she|you)\\s+(go|eat|have|see|buy|do|make|take|get|come|meet|drink|play|watch|visit|study|work)\\b', 'i'),
     when: /\b(yesterday|last\s+(?:night|week|weekend|month|year|summer|friday|saturday|sunday)|ago)\b/i,
     fix: (_, p, v) => `${p} ${IRREG[v.toLowerCase()]}`, concept: 'g_past', note: 'Pasado simple con “yesterday / last …”.' },
   { re: /\bdid(n't|\s+not)?\s+(went|ate|saw|had|bought|made|took|got|came|liked|wanted|played|watched|worked|visited|studied|arrived|decided|used|tried|stayed|loved)\b/i,
@@ -174,6 +175,7 @@ export function detectErrors(text: string): Correction[] {
     if (r.when && !r.when.test(text)) continue;
     const m = text.match(r.re);
     if (!m) continue;
+    if (r.noAux && AUX.test(text.slice(0, m.index))) continue;
     const better = text.replace(r.re, (...args) => r.fix(...(args.slice(0, -2) as string[]).map((x) => x ?? '')));
     if (better.trim().toLowerCase() === text.trim().toLowerCase()) continue;
     out.push({ said: text.trim(), better: better.trim(), concept: r.concept, note: r.note });
