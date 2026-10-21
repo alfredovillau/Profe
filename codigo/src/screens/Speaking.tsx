@@ -3,7 +3,7 @@ import { LEVELS, Level } from '../lib/content';
 import { AppState } from '../lib/engine';
 import {
   NewWord, SpeakingSession, TOPICS, TopicId, Turn, TutorSettings, avgScore, buildReview, claudeTutor, demoTutor,
-  fmtDuration, learnerContext, listen, loadTutor, saveTutor, speak, sttSupported, stopSpeaking, unlockAudio,
+  fmtDuration, isIOS, learnerContext, listen, loadTutor, saveTutor, speak, sttSupported, stopSpeaking, unlockAudio,
 } from '../lib/speaking';
 import { Bar, Button, Card, Chip, Icon, cx } from '../components/ui';
 
@@ -30,7 +30,7 @@ export default function Speaking({ s, onSave, onImmersive }: {
         setAutoSend={(autoSend) => setTutor((t) => ({ ...t, autoSend }))}
         onExit={() => setView({ v: 'setup' })}
         onDone={(sess, words) => {
-          onSave(sess, words);
+          try { onSave(sess, words); } catch { /* el review se muestra igual */ }
           setView({ v: 'review', sess, fresh: true });
         }} />
     );
@@ -149,7 +149,7 @@ function TutorSettingsPanel({ tutor, setTutor }: { tutor: TutorSettings; setTuto
 
 // ---------------- Llamada ----------------
 type Phase = 'idle' | 'listening' | 'thinking' | 'speaking';
-const PHASE_LABEL: Record<Phase, string> = { idle: 'Toca el micrófono para hablar', listening: 'Listening…', thinking: 'Thinking…', speaking: 'Speaking…' };
+const PHASE_LABEL: Record<Phase, string> = { idle: 'Toca el micrófono para responder', listening: 'Listening… toca el micrófono para enviar', thinking: 'Thinking…', speaking: 'Speaking…' };
 
 function Call({ s, topic, custom, level, tutor, setAutoSend, onExit, onDone }: {
   s: AppState; topic: TopicId; custom: string; level: Level; tutor: TutorSettings;
@@ -181,15 +181,29 @@ function Call({ s, topic, custom, level, tutor, setAutoSend, onExit, onDone }: {
 
   useEffect(() => {
     const id = setInterval(() => setSecs(Math.round((Date.now() - start.current) / 1000)), 1000);
+    // Cualquier error inesperado se muestra y libera los botones en vez de trabar la llamada
+    const onErr = (ev: ErrorEvent | PromiseRejectionEvent) => {
+      const msg = 'reason' in ev ? String((ev.reason && ev.reason.message) || ev.reason) : ev.message;
+      setError(`Algo falló: ${msg}. Puedes seguir o terminar la conversación.`);
+      setPhase('idle');
+    };
+    window.addEventListener('error', onErr);
+    window.addEventListener('unhandledrejection', onErr);
     ask([]);
-    return () => { alive.current = false; clearInterval(id); stopRef.current(); stopSpeaking(); };
+    return () => {
+      alive.current = false; clearInterval(id); stopSpeaking();
+      window.removeEventListener('error', onErr); window.removeEventListener('unhandledrejection', onErr);
+    };
   }, []); // eslint-disable-line
 
   async function ask(history: Turn[]) {
     setPhase('thinking');
     setError('');
     try {
-      const r = await engine.reply({ topic, customTopic: custom, level, learner, turns: history });
+      const r = await Promise.race([
+        engine.reply({ topic, customTopic: custom, level, learner, turns: history }),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('El tutor tardó demasiado en responder. Intenta de nuevo.')), 25_000)),
+      ]);
       if (!alive.current) return;
       let t = [...history];
       if (r.corrections.length) {
@@ -202,7 +216,8 @@ function Call({ s, topic, custom, level, tutor, setAutoSend, onExit, onDone }: {
       setPhase('speaking');
       await speak(r.reply, level);
       if (!alive.current) return;
-      if (sttSupported() && !typingRef.current) startListening(); else setPhase('idle');
+      // En iPhone el micrófono solo se puede abrir con un toque: no se abre solo
+      if (sttSupported() && !typingRef.current && !isIOS()) startListening(); else setPhase('idle');
     } catch (e) {
       if (!alive.current) return;
       setError(e instanceof Error ? e.message : 'No se pudo obtener respuesta.');
@@ -215,22 +230,23 @@ function Call({ s, topic, custom, level, tutor, setAutoSend, onExit, onDone }: {
     stopSpeaking();
     setInterim('');
     setPhase('listening');
-    let got = false;
     stopRef.current = listen({
       onInterim: setInterim,
       onFinal: (text, conf) => {
-        got = true;
+        stopRef.current = () => {};
         setInterim('');
+        if (!alive.current) return;
         if (!text) return setPhase('idle');
         if (autoRef.current) send(text, conf, false);
         else { setDraft(text); setPhase('idle'); }
       },
-      onEnd: () => { if (!got && alive.current) setPhase((p) => (p === 'listening' ? 'idle' : p)); },
+      onEnd: () => { stopRef.current = () => {}; setInterim(''); if (alive.current) setPhase((p) => (p === 'listening' ? 'idle' : p)); },
       onError: (e) => {
+        stopRef.current = () => {};
         if (e === 'not-allowed' || e === 'service-not-allowed') {
           setError('El micrófono está bloqueado. Permítelo en el navegador o escribe tus respuestas.');
           setTyping(true);
-        }
+        } else setError('No se pudo usar el micrófono. Tócalo de nuevo o escribe tu respuesta.');
         setPhase('idle');
       },
     });
@@ -246,23 +262,28 @@ function Call({ s, topic, custom, level, tutor, setAutoSend, onExit, onDone }: {
   }
 
   function micTap() {
-    if (phase === 'listening') { stopRef.current(); setPhase('idle'); return; }
+    if (phase === 'listening') { stopRef.current(); return; } // envía lo escuchado
     if (phase === 'thinking') return;
     startListening();
   }
 
   function end() {
     alive.current = false;
-    stopRef.current();
+    const stop = stopRef.current; stopRef.current = () => {};
+    try { stop(); } catch { /* */ }
     stopSpeaking();
     const t = turnsRef.current;
     if (!t.some((x) => x.role === 'user')) return onExit();
-    const seconds = Math.max(1, Math.round((Date.now() - start.current) / 1000));
-    const review = buildReview(s, t, topic, level, words.current);
-    onDone({
-      id: String(Date.now()), at: Date.now(), seconds, topic, topicLabel, level,
-      tutor: useClaude ? 'claude' : 'demo', turns: t, review,
-    }, words.current);
+    try {
+      const seconds = Math.max(1, Math.round((Date.now() - start.current) / 1000));
+      const review = buildReview(s, t, topic, level, words.current);
+      onDone({
+        id: String(Date.now()), at: Date.now(), seconds, topic, topicLabel, level,
+        tutor: useClaude ? 'claude' : 'demo', turns: t, review,
+      }, words.current);
+    } catch {
+      onExit(); // nunca dejar al usuario atrapado en la llamada
+    }
   }
 
   const lastTutor = [...turns].reverse().find((x) => x.role === 'tutor');

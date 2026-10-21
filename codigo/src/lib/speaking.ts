@@ -66,27 +66,53 @@ export const ttsSupported = () => typeof window !== 'undefined' && 'speechSynthe
 export function listen(h: {
   onInterim: (t: string) => void; onFinal: (t: string, conf: number) => void; onEnd: () => void; onError: (e: string) => void;
 }) {
+  // iPhone a veces nunca marca el resultado como "final" ni dispara onend.
+  // Por eso: si hay silencio 1.8 s, si se detiene a mano o si pasa el tiempo máximo,
+  // se envía lo último que se escuchó. Cada sesión termina exactamente una vez.
   const r = new SR();
   r.lang = 'en-US';
   r.interimResults = true;
   r.continuous = false;
   r.maxAlternatives = 1;
   let done = false;
+  let last = '';
+  let lastConf = 0;
+  let silence: ReturnType<typeof setTimeout> | undefined;
+  const hardStop = setTimeout(() => finish(), 30_000);
+  const finish = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(silence); clearTimeout(hardStop);
+    try { r.abort ? r.abort() : r.stop(); } catch { /* */ }
+    if (last.trim()) h.onFinal(last.trim(), lastConf); else h.onEnd();
+  };
   r.onresult = (e: any) => {
+    if (done) return;
     let text = '';
     let final = false;
-    let conf = 0;
     for (let i = 0; i < e.results.length; i++) {
       text += e.results[i][0].transcript;
-      if (e.results[i].isFinal) { final = true; conf = e.results[i][0].confidence || 0; }
+      if (e.results[i].isFinal) { final = true; lastConf = e.results[i][0].confidence || 0; }
     }
-    if (final && !done) { done = true; h.onFinal(text.trim(), conf); } else h.onInterim(text);
+    last = text;
+    if (final) return finish();
+    h.onInterim(text);
+    clearTimeout(silence);
+    silence = setTimeout(finish, 1800);
   };
-  r.onerror = (e: any) => h.onError(e.error || 'error');
-  r.onend = () => h.onEnd();
-  try { r.start(); } catch (e) { h.onError(String(e)); }
-  return () => { try { r.stop(); } catch { /* */ } };
+  r.onerror = (e: any) => {
+    const err = e?.error || 'error';
+    if (err === 'no-speech' || err === 'aborted') return finish();
+    if (!done) { done = true; clearTimeout(silence); clearTimeout(hardStop); h.onError(err); }
+  };
+  r.onend = () => finish();
+  try { r.start(); } catch (e) { done = true; clearTimeout(hardStop); h.onError(String(e)); }
+  return finish; // detener = enviar lo que se haya escuchado
 }
+
+export const isIOS = () =>
+  typeof navigator !== 'undefined' &&
+  (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
 let voice: SpeechSynthesisVoice | null = null;
 function pickVoice() {
@@ -114,9 +140,10 @@ export function speak(text: string, level: Level): Promise<void> {
     u.rate = [0.85, 0.9, 0.95, 1, 1.03][levelRank(level)];
     u.onend = () => res();
     u.onerror = () => res();
-    speechSynthesis.speak(u);
+    // En iPhone se espera un instante a que el micrófono suelte el audio
+    setTimeout(() => { try { speechSynthesis.speak(u); } catch { res(); } }, isIOS() ? 300 : 0);
     // Respaldo por si el navegador no dispara onend
-    setTimeout(res, 1500 + text.length * 90);
+    setTimeout(res, Math.min(20_000, 1800 + text.length * 90));
   });
 }
 export const stopSpeaking = () => { if (ttsSupported()) speechSynthesis.cancel(); };
